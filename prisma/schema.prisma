@@ -1,0 +1,266 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// A user account. Auth is not wired up yet, but every Page/Block already
+/// belongs to one so adding real auth later is a matter of adding sessions,
+/// not a data migration.
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  /// Empreinte scrypt au format `scrypt$N$r$p$sel$clé` (voir `lib/password.ts`).
+  /// Nullable : le compte créé avant l'auth n'en a pas encore, il en définit
+  /// un à la première connexion.
+  passwordHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pages     Page[]
+  blocks    Block[]
+  pageVersions PageVersion[]
+  workspaces WorkspaceMember[]
+  assets    Asset[]
+  sessions  Session[]
+  sentInvitations WorkspaceInvitation[]
+
+  @@map("users")
+}
+
+/// A workspace groups pages the way a Notion "team" does. Solo usage just
+/// means one workspace with one member, but the shape is there so multi-user
+/// sharing later doesn't require restructuring Page ownership.
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     WorkspaceMember[]
+  pages       Page[]
+  invitations WorkspaceInvitation[]
+
+  @@map("workspaces")
+}
+
+/// Invitation à rejoindre un espace, matérialisée par un lien à partager.
+///
+/// Le lien porte un secret aléatoire dont la base ne garde que l'empreinte —
+/// même principe que `Session` : une fuite de la table ne permet pas de
+/// fabriquer une invitation valide.
+model WorkspaceInvitation {
+  id        String @id @default(cuid())
+  /// SHA-256 du jeton présent dans le lien.
+  tokenHash String @unique
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// Rôle accordé à l'acceptation.
+  role String @default("editor") // editor | viewer
+
+  /// Facultatif : restreint l'invitation à une adresse précise. `null` = tout
+  /// porteur du lien peut l'utiliser.
+  email String?
+
+  invitedById String
+  invitedBy   User   @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  expiresAt  DateTime
+  /// Renseigné à l'acceptation : une invitation ne sert qu'une fois, et on
+  /// garde la trace plutôt que de supprimer la ligne.
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([expiresAt])
+  @@map("workspace_invitations")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  role        String   @default("owner") // owner | editor | viewer
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+/// A Notion-style page. Pages nest under one another to form the sidebar
+/// tree; each page owns an ordered list of top-level Blocks, which can
+/// themselves nest (a toggle, a nested bullet list, a column, ...).
+model Page {
+  id         String  @id @default(cuid())
+  title      String  @default("Untitled")
+  icon       String?
+  coverImage String?
+  isArchived Boolean @default(false)
+  isPublished Boolean @default(false)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   Page?   @relation("PageToPage", fields: [parentId], references: [id], onDelete: Cascade)
+  children Page[]  @relation("PageToPage")
+
+  order    Int           @default(0)
+  blocks   Block[]
+  versions PageVersion[]
+  assets   Asset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([parentId])
+  @@map("pages")
+}
+
+/// One ProseMirror/Tiptap node, stored as its own row so blocks can be
+/// nested, reordered, referenced from elsewhere (synced blocks), and
+/// queried/indexed individually instead of only as one opaque page blob.
+model Block {
+  id      String @id @default(cuid())
+  type    String // paragraph | heading | bulletList | todo | toggle | image | code | ...
+  content Json   // Tiptap node attrs + inline content (text, marks) for this node only
+  /// Plain text extracted from `content` at write time, kept only so search
+  /// can do a simple case-insensitive `contains` instead of matching inside
+  /// arbitrary nested JSON (which Postgres/Prisma's Json filters don't do
+  /// recursively).
+  textContent String @default("")
+  order   Int
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   Block?  @relation("BlockToBlock", fields: [parentId], references: [id], onDelete: Cascade)
+  children Block[] @relation("BlockToBlock")
+
+  /// For "synced blocks": when set, this block mirrors the content of
+  /// another block elsewhere, Notion-style.
+  syncedFromId String?
+  syncedFrom   Block?  @relation("SyncedBlock", fields: [syncedFromId], references: [id], onDelete: SetNull)
+  syncedCopies Block[] @relation("SyncedBlock")
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId, parentId, order])
+  @@index([textContent])
+  @@map("blocks")
+}
+
+/// Session serveur. Choix délibéré face au JWT « stateless » : une session en
+/// base est **révocable** (déconnexion immédiate, ici comme sur tous les
+/// appareils), ce qu'un jeton signé ne permet pas avant son expiration. La
+/// doc Next présente d'ailleurs cette option comme la plus sûre des deux.
+///
+/// Le cookie ne transporte JAMAIS `id` : il porte un secret aléatoire dont on
+/// ne stocke que l'empreinte SHA-256 (`tokenHash`). Une fuite de la base ne
+/// permet donc pas de forger une session.
+model Session {
+  id        String @id @default(cuid())
+  /// SHA-256 du jeton présent dans le cookie. Unique : c'est la clé de lecture.
+  tokenHash String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  /// Dernière utilisation : sert au renouvellement glissant.
+  lastUsedAt DateTime @default(now())
+
+  /// Contexte de connexion, pour qu'une liste « mes appareils » soit possible
+  /// plus tard sans migration.
+  userAgent String?
+  ipAddress String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Binary payload of an uploaded image, kept in Postgres rather than on disk
+/// or S3 so that a `pg_dump` is a complete backup and so that restoring an
+/// archived page can never surface a broken image.
+///
+/// Deliberately hung off Page, NOT Block: `savePageContent` deletes and
+/// recreates every Block row on each save, so a cascade from Block would
+/// destroy the bytes on the next keystroke. The document only ever stores an
+/// asset id, which survives that churn.
+///
+/// `data` is a large column: never `SELECT *` this table. Listing/metadata
+/// queries must use an explicit `select` that omits `data`, otherwise every
+/// gallery render would pull megabytes through Prisma.
+model Asset {
+  id       String @id @default(cuid())
+  /// Original file name, kept for download and for the caption fallback.
+  filename String
+  mimeType String
+  /// Byte length of `data`, denormalised so listings can show a size without
+  /// reading the blob itself.
+  size     Int
+  width    Int?
+  height   Int?
+  /// SHA-256 of the stored bytes. Lets the same image pasted twice reuse one
+  /// row instead of duplicating the payload.
+  checksum String
+
+  data Bytes
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([pageId, checksum])
+  @@index([pageId])
+  @@map("assets")
+}
+
+/// A point-in-time snapshot of a page's full document, so edits can be
+/// browsed and rolled back. Snapshots are throttled at write time (see
+/// savePageContent) rather than one per keystroke/save.
+model PageVersion {
+  id      String @id @default(cuid())
+  title   String
+  content Json // full { type: "doc", content: [...] } snapshot
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([pageId, createdAt])
+  @@map("page_versions")
+}

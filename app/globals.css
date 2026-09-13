@@ -1,26 +1,908 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Feuille de style de tldraw (bloc Tableau blanc). Importée ici plutôt que
+   dans le composant : Tailwind v4 doit la voir au moment de la compilation. */
+@import "tldraw/tldraw.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
+@plugin "@tailwindcss/typography";
+
+/* ============================================================================
+   DA « Encre & Papier chaud »
+   Papier ivoire / parchemin, encre profonde, accent terracotta, titres serif.
+   Toutes les paires texte/fond ci-dessous sont >= 4.5:1 (AA), les paires
+   secondaires >= 4.5:1 aussi pour rester lisibles dans les deux thèmes.
+   ========================================================================== */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-serif: var(--font-editorial), ui-serif, Georgia, serif;
+  --font-heading: var(--font-editorial), ui-serif, Georgia, serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Accent éditorial : le terracotta de la DA, disponible hors du rôle
+     `primary` pour les touches décoratives (filets, puces, surlignages). */
+  --color-ink: var(--ink);
+  --color-ochre: var(--ochre);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Une seule échelle d'élévation, très diffuse : la DA papier ne supporte
+     pas les ombres dures. */
+  --shadow-paper: 0 1px 2px -1px oklch(0.24 0.03 45 / 0.08),
+    0 2px 8px -2px oklch(0.24 0.03 45 / 0.06);
+  --shadow-lifted: 0 2px 4px -2px oklch(0.24 0.03 45 / 0.1),
+    0 8px 24px -6px oklch(0.24 0.03 45 / 0.12);
+
+  /* Tokens de motion partagés : un seul rythme pour toute l'app. */
+  --ease-editorial: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* --- Thème clair : papier ivoire --- */
+  --background: oklch(0.974 0.006 75);
+  --foreground: oklch(0.216 0.012 45);
+
+  --card: oklch(0.992 0.004 85);
+  --card-foreground: oklch(0.216 0.012 45);
+  --popover: oklch(0.994 0.004 85);
+  --popover-foreground: oklch(0.216 0.012 45);
+
+  /* Terracotta : accent et action principale. Blanc dessus = 5.1:1 */
+  --primary: oklch(0.512 0.164 38);
+  --primary-foreground: oklch(0.985 0.004 85);
+
+  --secondary: oklch(0.938 0.011 78);
+  --secondary-foreground: oklch(0.262 0.014 45);
+
+  --muted: oklch(0.941 0.01 78);
+  /* 4.7:1 sur --background : le gris secondaire reste lisible. */
+  --muted-foreground: oklch(0.502 0.017 55);
+
+  --accent: oklch(0.922 0.018 70);
+  --accent-foreground: oklch(0.262 0.016 42);
+
+  --destructive: oklch(0.505 0.178 25);
+
+  --border: oklch(0.886 0.013 72);
+  --input: oklch(0.874 0.014 72);
+  --ring: oklch(0.512 0.164 38);
+
+  --ink: oklch(0.216 0.012 45);
+  --ochre: oklch(0.63 0.132 65);
+
+  --chart-1: oklch(0.512 0.164 38);
+  --chart-2: oklch(0.63 0.132 65);
+  --chart-3: oklch(0.432 0.072 145);
+  --chart-4: oklch(0.472 0.086 250);
+  --chart-5: oklch(0.398 0.038 45);
+
+  --radius: 0.5rem;
+
+  /* Sidebar : parchemin, un cran plus chaud/soutenu que la toile. */
+  --sidebar: oklch(0.944 0.013 74);
+  --sidebar-foreground: oklch(0.244 0.013 45);
+  --sidebar-primary: oklch(0.512 0.164 38);
+  --sidebar-primary-foreground: oklch(0.985 0.004 85);
+  --sidebar-accent: oklch(0.9 0.018 70);
+  --sidebar-accent-foreground: oklch(0.232 0.014 42);
+  --sidebar-border: oklch(0.878 0.015 72);
+  --sidebar-ring: oklch(0.512 0.164 38);
+}
+
+.dark {
+  /* --- Thème sombre : encre profonde, teintée chaud --- */
+  --background: oklch(0.176 0.008 48);
+  --foreground: oklch(0.922 0.01 78);
+
+  --card: oklch(0.222 0.01 48);
+  --card-foreground: oklch(0.922 0.01 78);
+  --popover: oklch(0.236 0.011 48);
+  --popover-foreground: oklch(0.922 0.01 78);
+
+  /* Terracotta désaturé/éclairci pour le sombre (pas une inversion) :
+     encre foncée dessus = 7.2:1 */
+  --primary: oklch(0.702 0.142 42);
+  --primary-foreground: oklch(0.188 0.012 45);
+
+  --secondary: oklch(0.272 0.012 50);
+  --secondary-foreground: oklch(0.922 0.01 78);
+
+  --muted: oklch(0.268 0.012 50);
+  /* 4.8:1 sur --background */
+  --muted-foreground: oklch(0.706 0.014 70);
+
+  --accent: oklch(0.302 0.018 52);
+  --accent-foreground: oklch(0.938 0.01 78);
+
+  --destructive: oklch(0.672 0.176 25);
+
+  --border: oklch(0.968 0.01 78 / 12%);
+  --input: oklch(0.968 0.01 78 / 16%);
+  --ring: oklch(0.702 0.142 42);
+
+  --ink: oklch(0.922 0.01 78);
+  --ochre: oklch(0.768 0.118 72);
+
+  --chart-1: oklch(0.702 0.142 42);
+  --chart-2: oklch(0.768 0.118 72);
+  --chart-3: oklch(0.668 0.104 150);
+  --chart-4: oklch(0.672 0.096 252);
+  --chart-5: oklch(0.598 0.03 60);
+
+  --sidebar: oklch(0.148 0.008 48);
+  --sidebar-foreground: oklch(0.892 0.01 78);
+  --sidebar-primary: oklch(0.702 0.142 42);
+  --sidebar-primary-foreground: oklch(0.188 0.012 45);
+  --sidebar-accent: oklch(0.256 0.014 52);
+  --sidebar-accent-foreground: oklch(0.938 0.01 78);
+  --sidebar-border: oklch(0.968 0.01 78 / 10%);
+  --sidebar-ring: oklch(0.702 0.142 42);
+
+  /* En sombre, l'élévation passe par un halo sombre plus franc. */
+  --shadow-paper: 0 1px 2px -1px oklch(0 0 0 / 0.4),
+    0 2px 8px -2px oklch(0 0 0 / 0.3);
+  --shadow-lifted: 0 2px 4px -2px oklch(0 0 0 / 0.45),
+    0 8px 24px -6px oklch(0 0 0 / 0.4);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "liga" 1, "calt" 1;
+    text-rendering: optimizeLegibility;
+  }
+
+  html {
+    @apply font-sans;
+    /* Le fond du document suit le thème même au-delà du scroll (overscroll
+       iOS, zone derrière la sidebar). */
+    background-color: var(--background);
+  }
+
+  /* Titres éditoriaux : serif, resserrés. La graisse reste modérée parce
+     que le serif porte déjà la hiérarchie. */
+  h1,
+  h2,
+  h3,
+  .font-heading {
+    font-family: var(--font-heading);
+    letter-spacing: -0.015em;
+  }
+
+  /* Chiffres alignés partout (dates d'historique, compteurs) pour éviter
+     que les colonnes sautent d'un rendu à l'autre. */
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Focus visible et cohérent sur tout ce qui est interactif — jamais
+     supprimé, seulement remplacé par un anneau à l'accent. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Sélection : un voile terracotta discret. À 24 % le fond devenait
+     presque opaque en sombre et le texte passait dessous — 16 % laisse la
+     teinte reconnaissable tout en gardant le texte net. */
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 16%, transparent);
+    color: inherit;
+  }
+
+  /* Barres de défilement discrètes, accordées au papier. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent)
+      transparent;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* prefers-reduced-motion : on coupe tout mouvement décoratif mais on garde
+   les changements d'état instantanés (donc toujours perceptibles). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
+
+/* ============================================================================
+   Utilitaires de la DA
+   ========================================================================== */
+
+/* Grain de papier : une trame très légère qui donne la matière sans
+   coûter une image. Posée sur la toile d'écriture uniquement. */
+@utility paper-grain {
+  position: relative;
+}
+
+@utility paper-grain-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.4;
+  background-image: radial-gradient(
+    color-mix(in oklch, var(--foreground) 8%, transparent) 0.5px,
+    transparent 0.5px
+  );
+  background-size: 4px 4px;
+}
+
+/* Filet éditorial : le petit trait terracotta qui marque les titres de
+   section et les états vides. */
+@utility rule-accent {
+  &::before {
+    content: "";
+    display: block;
+    width: 2.5rem;
+    height: 2px;
+    border-radius: 999px;
+    background-color: var(--primary);
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* ============================================================================
+   Éditeur Tiptap
+   ========================================================================== */
+
+.ProseMirror p.is-editor-empty:first-child::before,
+.ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+  opacity: 0.55;
+}
+
+/* Les titres dans le document reprennent le serif de la DA. */
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.015em;
+}
+
+/* Bloc de citation : filet terracotta plutôt que la barre grise de prose. */
+.ProseMirror blockquote {
+  border-inline-start: 2px solid var(--primary);
+  font-style: normal;
+  color: var(--muted-foreground);
+}
+
+.ProseMirror blockquote p::before,
+.ProseMirror blockquote p::after {
+  content: none;
+}
+
+.ProseMirror hr {
+  border-color: var(--border);
+}
+
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label {
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+  margin: 0;
+  /* La case à cocher native prend l'accent de la DA au lieu du bleu OS. */
+  accent-color: var(--primary);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li > div > p {
+  margin: 0;
+}
+
+/* Coche d'une tâche dans le flux du texte : même coup de stylo que dans le
+   bloc todo, mais en CSS pur. `TaskItem` est l'extension Tiptap standard,
+   sans NodeView React : rien de React ne peut s'insérer à l'intérieur, donc
+   le tracé passe par un pseudo-élément dont on anime le `stroke-dashoffset`.
+   Le chemin est le même que celui de `strike-through.tsx`, encodé en URL. */
+.ProseMirror ul[data-type="taskList"] li > div {
+  position: relative;
+}
+
+/* Le trait doit couvrir le texte, pas la largeur du bloc : le paragraphe
+   passe donc en `inline-block` pour se rétracter sur son contenu, et c'est
+   lui qui porte le tracé. */
+.ProseMirror ul[data-type="taskList"] li > div > p {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.ProseMirror ul[data-type="taskList"] li > div > p::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 340 32' preserveAspectRatio='none'><path d='M 10 16.91 s 79.8 -11.36 98.1 -11.34 c 22.2 0.02 -47.82 14.25 -33.39 22.02 c 12.61 6.77 124.18 -27.98 133.31 -17.28 c 7.52 8.38 -26.8 20.02 4.61 22.05 c 24.55 1.93 113.37 -20.36 113.37 -20.36' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  /* Le tracé se révèle de gauche à droite : `clip-path` évite d'avoir à
+     manipuler un dasharray dont la longueur dépend de la largeur réelle. */
+  clip-path: inset(0 100% 0 0);
+  opacity: 0;
+  transition:
+    clip-path 0.7s ease-in-out,
+    opacity 0.01s linear 0.7s;
+}
+
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--muted-foreground);
+}
+
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p::after {
+  clip-path: inset(0 0 0 0);
+  opacity: 1;
+  transition:
+    clip-path 0.7s ease-in-out,
+    opacity 0.01s linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ProseMirror ul[data-type="taskList"] li > div > p::after {
+    transition: none;
+  }
+}
+
+/* Inline code: drop prose's default `` ` `` quote marks in favor of a
+   plain pill background, which reads better for short shell/code snippets. */
+.ProseMirror code {
+  background-color: var(--muted);
+  border-radius: 0.25rem;
+  padding: 0.15em 0.4em;
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  font-weight: 500;
+}
+
+.ProseMirror code::before,
+.ProseMirror code::after {
+  content: none;
+}
+
+.ProseMirror pre {
+  background-color: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.ProseMirror pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* ============================================================================
+   Navigation : état actif
+   ========================================================================== */
+
+/* La page courante porte un filet terracotta à gauche en plus du fond
+   d'accent : l'état actif reste distinguable du simple survol, et ne
+   repose donc pas sur la seule couleur de fond. */
+[data-slot="sidebar-menu-button"][data-active] {
+  position: relative;
+}
+
+[data-slot="sidebar-menu-button"][data-active]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0.3rem;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: 999px;
+  background-color: var(--sidebar-primary);
+}
+
+/* Survol/actif de la sidebar : transition courte, sur la couleur seule
+   (jamais sur la géométrie, qui décalerait les lignes voisines). */
+[data-slot="sidebar-menu-button"] {
+  transition: background-color 150ms var(--ease-editorial),
+    color 150ms var(--ease-editorial);
+}
+
+/* ============================================================================
+   Typographie du document (variante `prose-editorial`)
+   Accorde @tailwindcss/typography aux tokens de la DA : les gris par défaut
+   de prose ignorent le papier chaud et cassent le contraste en sombre.
+   ========================================================================== */
+
+.prose-editorial {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-bullets: color-mix(in oklch, var(--primary) 60%, transparent);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--muted-foreground);
+  --tw-prose-quote-borders: var(--primary);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-pre-bg: var(--muted);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+
+  /* Les mêmes valeurs en sombre : `dark:prose-invert` ne doit pas réintroduire
+     les gris neutres par-dessus notre palette chaude. */
+  --tw-prose-invert-body: var(--foreground);
+  --tw-prose-invert-headings: var(--foreground);
+  --tw-prose-invert-lead: var(--muted-foreground);
+  --tw-prose-invert-links: var(--primary);
+  --tw-prose-invert-bold: var(--foreground);
+  --tw-prose-invert-counters: var(--muted-foreground);
+  --tw-prose-invert-bullets: color-mix(
+    in oklch,
+    var(--primary) 60%,
+    transparent
+  );
+  --tw-prose-invert-hr: var(--border);
+  --tw-prose-invert-quotes: var(--muted-foreground);
+  --tw-prose-invert-quote-borders: var(--primary);
+  --tw-prose-invert-captions: var(--muted-foreground);
+  --tw-prose-invert-code: var(--foreground);
+  --tw-prose-invert-pre-code: var(--foreground);
+  --tw-prose-invert-pre-bg: var(--muted);
+  --tw-prose-invert-th-borders: var(--border);
+  --tw-prose-invert-td-borders: var(--border);
+
+  /* Corps de texte : 17px et interligne 1.75 — la mesure de lecture longue
+     de la DA, plus confortable que le 16/1.5 par défaut. */
+  font-size: 1.0625rem;
+  line-height: 1.75;
+}
+
+/* Rythme vertical du document : des marges franches entre les blocs pour
+   que la structure se lise sans avoir à cliquer. */
+.prose-editorial :where(h1, h2, h3) {
+  font-weight: 400;
+  margin-top: 1.8em;
+  margin-bottom: 0.6em;
+}
+
+.prose-editorial :where(h1):first-child,
+.prose-editorial :where(h2):first-child,
+.prose-editorial :where(h3):first-child {
+  margin-top: 0;
+}
+
+.prose-editorial :where(h1) {
+  font-size: 1.875em;
+}
+
+.prose-editorial :where(h2) {
+  font-size: 1.5em;
+}
+
+.prose-editorial :where(h3) {
+  font-size: 1.25em;
+  /* Le h3 repasse en sans-serif : trois niveaux de serif d'affilée
+     deviennent indistincts, la graisse porte mieux ce niveau-là. */
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.prose-editorial :where(a) {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color 150ms var(--ease-editorial);
+}
+
+.prose-editorial :where(a):hover {
+  color: color-mix(in oklch, var(--primary) 80%, var(--foreground));
+}
+
+/* ============================================================================
+   Tableaux du document
+   Filets fins, en-tête en parchemin, pas de zébrage : la DA papier tient au
+   trait plutôt qu'au remplissage.
+   ========================================================================== */
+
+/* Le wrapper rend le tableau défilable horizontalement au lieu d'élargir la
+   colonne de lecture quand il y a beaucoup de colonnes. */
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin-block: 1.25em;
+  /* Le dépassement visuel de part et d'autre du texte donne de l'air aux
+     tableaux larges sans casser la mesure de lecture du reste. */
+  max-width: 100%;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.9375em;
+  line-height: 1.5;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  position: relative;
+  min-width: 4rem;
+  border: 1px solid var(--border);
+  padding: 0.5em 0.7em;
+  vertical-align: top;
+  text-align: start;
+}
+
+.ProseMirror th {
+  background-color: color-mix(in oklch, var(--muted) 70%, var(--background));
+  font-weight: 600;
+}
+
+/* Les paragraphes dans les cellules ne portent pas la marge du corps de
+   texte, sinon chaque cellule devient deux fois trop haute. */
+.ProseMirror th > p,
+.ProseMirror td > p {
+  margin: 0;
+}
+
+.ProseMirror th > p + p,
+.ProseMirror td > p + p {
+  margin-top: 0.4em;
+}
+
+/* Poignée de redimensionnement de colonne : invisible au repos, terracotta
+   au survol — l'affordance n'apparaît que quand elle est utile. */
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: -2px;
+  right: -2px;
+  width: 4px;
+  background-color: var(--primary);
+  opacity: 0;
+  transition: opacity 150ms var(--ease-editorial);
+  pointer-events: none;
+}
+
+.ProseMirror.resize-cursor .column-resize-handle,
+.ProseMirror th:hover .column-resize-handle,
+.ProseMirror td:hover .column-resize-handle {
+  opacity: 0.7;
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Cellules sélectionnées : un voile d'accent, pas un bleu système. */
+.ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(in oklch, var(--primary) 14%, transparent);
+  pointer-events: none;
+}
+
+/* L'alignement des cellules n'a pas besoin de CSS : TableKit rend
+   l'attribut `align` sous forme de `style="text-align: ..."` sur la
+   cellule. Une regle [align="..."] ici ne servirait donc à rien. */
+
+/* Remplissage de cellule : la couleur choisie est posée en voile via
+   color-mix plutôt qu'en aplat, pour que le texte reste lisible dans les
+   deux thèmes sans avoir à choisir une teinte par thème. */
+.ProseMirror th[data-background-color],
+.ProseMirror td[data-background-color] {
+  background-color: color-mix(
+    in oklch,
+    var(--cell-fill) 16%,
+    var(--background)
+  );
+}
+
+.dark .ProseMirror th[data-background-color],
+.dark .ProseMirror td[data-background-color] {
+  background-color: color-mix(
+    in oklch,
+    var(--cell-fill) 22%,
+    var(--background)
+  );
+}
+
+/* Zébrage : une ligne sur deux du corps du tableau, en excluant l'en-tête
+   qui a déjà son propre fond. Un voile très léger suffit à guider l'œil.
+
+   Le marqueur est porté par `.tableWrapper`, pas par le <table> : avec
+   `resizable: true`, TableKit rend le tableau via son propre TableView, et
+   c'est le wrapper qui est le nœud DOM décoré. */
+.ProseMirror [data-striped="true"] tr:nth-child(even) td {
+  background-color: color-mix(in oklch, var(--muted) 45%, var(--background));
+}
+
+/* Une couleur explicite sur la cellule doit gagner sur le zébrage. */
+.ProseMirror [data-striped="true"] tr:nth-child(even) td[data-background-color] {
+  background-color: color-mix(
+    in oklch,
+    var(--cell-fill) 16%,
+    var(--background)
+  );
+}
+
+/* ============================================================================
+   Tableau en plein écran
+   L'éditeur n'est ni démonté ni déplacé (ProseMirror perdrait sa sélection
+   et son historique) : on étale la toile d'écriture sur tout l'écran et on
+   masque ce qui n'est pas le tableau courant.
+   ========================================================================== */
+
+/* La surcouche : le conteneur de l'éditeur passe en position fixe. */
+html[data-table-fullscreen] [data-slot="editor-canvas"] {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  max-width: none;
+  margin: 0;
+  overflow: auto;
+  background-color: var(--background);
+  padding: 4.5rem 1.5rem 6rem;
+}
+
+@media (min-width: 640px) {
+  html[data-table-fullscreen] [data-slot="editor-canvas"] {
+    padding-inline: 2.5rem;
+  }
+}
+
+/* Le reste de l'app ne doit pas défiler derrière la surcouche. */
+html[data-table-fullscreen],
+html[data-table-fullscreen] body {
+  overflow: hidden;
+}
+
+/* Tout ce qui n'est pas un tableau est masqué : titre, emoji, paragraphes.
+   `visibility` plutôt que `display` pour que ProseMirror garde des positions
+   valides — un nœud sans boîte casserait le calcul de sélection. */
+html[data-table-fullscreen] .ProseMirror > * {
+  display: none;
+}
+
+/* Seul le tableau ciblé reste visible : une page peut en contenir
+   plusieurs, et les afficher tous rendrait le mode inutile. */
+html[data-table-fullscreen]
+  .ProseMirror
+  > .tableWrapper[data-fullscreen-target] {
+  display: block;
+}
+
+html[data-table-fullscreen] [data-slot="editor-chrome"],
+html[data-table-fullscreen] #page-title,
+html[data-table-fullscreen] label[for="page-title"] {
+  display: none;
+}
+
+/* Le tableau occupe la largeur disponible, avec une hauteur de cellule plus
+   confortable : c'est tout l'intérêt du mode. */
+html[data-table-fullscreen] .ProseMirror .tableWrapper {
+  margin-block: 0;
+}
+
+html[data-table-fullscreen] .ProseMirror table {
+  font-size: 1rem;
+}
+
+html[data-table-fullscreen] .ProseMirror th,
+html[data-table-fullscreen] .ProseMirror td {
+  padding: 0.65em 0.85em;
+}
+
+/* Le rail de formatage du document n'a pas sa place ici : la barre du
+   tableau porte déjà tout ce qui est utile. */
+html[data-table-fullscreen] [aria-label="Mise en forme"] {
+  display: none;
+}
+
+/* La barre du tableau, elle, reste indispensable : c'est par elle qu'on
+   quitte le mode et qu'on modifie la grille. Elle est rendue dans la toile
+   (devenue `fixed`), donc on la remonte explicitement au-dessus. */
+html[data-table-fullscreen] [aria-label="Actions du tableau"] {
+  /* Au-dessus de la surcouche plein écran (60) et de son bandeau (61),
+     mais sous les popovers de shadcn (50 dans un contexte non empilé, et
+     portés hors de la surcouche) : la barre ne doit jamais recouvrir le
+     panneau qu'elle ouvre. */
+  z-index: 61;
+}
+
+/* La poignée de déplacement de bloc n'a pas de sens sur un tableau isolé. */
+html[data-table-fullscreen] .drag-handle {
+  display: none;
+}
+
+/* ============================================================================
+   Blocs complexes en plein écran (Kanban, etc.)
+   ========================================================================== */
+
+html[data-block-fullscreen] [data-slot="editor-canvas"] {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  max-width: none;
+  margin: 0;
+  overflow: auto;
+  background-color: var(--background);
+  padding: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  html[data-block-fullscreen] [data-slot="editor-canvas"] {
+    padding-inline: 2.5rem;
+  }
+}
+
+html[data-block-fullscreen],
+html[data-block-fullscreen] body {
+  overflow: hidden;
+}
+
+html[data-block-fullscreen] .ProseMirror > * {
+  display: none;
+}
+
+/* Tiptap enveloppe chaque NodeView React dans un `div.react-renderer` : c'est
+   lui, et non notre propre conteneur, qui est enfant direct de `.ProseMirror`.
+   L'attribut de ciblage est donc posé sur ce wrapper. Un sélecteur
+   enfant-direct visant `.whiteboard-node-view` ne matcherait jamais, et la
+   page resterait entièrement masquée par la règle ci-dessus. */
+html[data-block-fullscreen] .ProseMirror > [data-fullscreen-target] {
+  display: block;
+}
+
+/* Un canvas doit occuper toute la fenêtre : le rembourrage hérité du mode
+   plein écran (pensé pour le Kanban, qui respire mieux avec des marges)
+   laissait une bande vide à droite et en bas, et faisait déborder les
+   panneaux d'outils de tldraw hors du cadre.
+   L'attribut de ciblage vit sur le wrapper `.react-renderer` de Tiptap, pas
+   sur notre `.whiteboard-node-view` : c'est donc lui qu'on interroge. */
+html[data-block-fullscreen]:has(
+    .ProseMirror > [data-fullscreen-target] .whiteboard-node-view
+  )
+  [data-slot="editor-canvas"] {
+  padding: 0;
+}
+
+/* La marge verticale du bloc (`my-6`) n'a de sens que dans le flux du
+   document. En plein écran, elle décalait le bloc vers le bas alors qu'il
+   occupe déjà toute la hauteur de la fenêtre : le bas débordait hors écran,
+   emportant la barre d'outils de tldraw. */
+html[data-block-fullscreen]
+  .ProseMirror
+  > [data-fullscreen-target]
+  .whiteboard-node-view {
+  margin-block: 0;
+}
+
+html[data-block-fullscreen] [data-slot="editor-chrome"],
+html[data-block-fullscreen] #page-title,
+html[data-block-fullscreen] label[for="page-title"] {
+  display: none;
+}
+
+html[data-block-fullscreen] [aria-label="Mise en forme"],
+html[data-block-fullscreen] .drag-handle {
+  display: none;
+}
+
+/* ============================================================================
+   Empilement de tldraw
+   tldraw déclare ses couches d'interface sur `.tl-container` avec des valeurs
+   très hautes (panneaux 300, menus 400, bandeaux 999). Ces valeurs sont
+   pensées pour une app où tldraw occupe l'écran ; ici il n'est qu'un bloc
+   parmi d'autres, et sa barre d'outils passait devant le menu « / » et les
+   popovers de l'éditeur. Comme ce sont des variables, il suffit de les
+   redéfinir sur le conteneur : la hiérarchie interne de tldraw est conservée
+   (panneaux < menus < bandeaux), mais l'ensemble repasse sous notre interface.
+   ========================================================================== */
+.tl-container {
+  --tl-layer-panels: 3;
+  --tl-layer-menus: 4;
+  --tl-layer-toasts: 6;
+  --tl-layer-cursor: 7;
+  --tl-layer-header-footer: 9;
+}
+
+/* Le conteneur lui-même doit créer un contexte d'empilement borné, sinon ses
+   enfants restent comparables aux éléments de la page malgré les valeurs
+   basses ci-dessus. */
+.whiteboard-node-view .tl-container {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+/* Scrollbars fines et esthétiques pour le Kanban */
+.kanban-node-view ::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.kanban-node-view ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-node-view ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+.kanban-node-view ::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
