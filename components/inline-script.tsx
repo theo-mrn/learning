@@ -1,22 +1,24 @@
+"use client";
+
+import { useServerInsertedHTML } from "next/navigation";
+
 /**
- * Un `<script>` inline qui s'exécute pendant l'analyse du HTML — donc avant
- * le premier paint, ce qu'aucun effet React ne permet.
+ * Un `<script>` inline injecté directement dans le HTML initial côté serveur
+ * (via `useServerInsertedHTML`) pour s'exécuter pendant l'analyse du HTML,
+ * avant le premier paint (anti-FOUC pour le thème).
  *
- * Le script n'est rendu que côté serveur : une fois dans le HTML, le
- * navigateur l'exécute au parsing, et il n'a plus aucune raison d'exister
- * dans l'arbre React du client. Le rendre aussi au client déclenchait
- * l'avertissement « Encountered a script tag while rendering React
- * component » — et un `<script>` rendu par React n'y serait de toute façon
- * jamais exécuté. `suppressHydrationWarning` absorbe l'écart entre le HTML
- * du serveur et l'arbre client, qui est ici voulu.
+ * En passant par `useServerInsertedHTML`, le script est inséré directement
+ * dans le flux HTML du serveur sans faire partie de l'arbre de composants
+ * React rendu côté client, ce qui évite l'avertissement React 19 :
+ * « Encountered a script tag while rendering React component ».
  */
 export function InlineScript({ html }: { html: string }) {
-  if (typeof window !== "undefined") return null;
-
-  return (
+  useServerInsertedHTML(() => (
     <script
-      suppressHydrationWarning
       dangerouslySetInnerHTML={{ __html: html }}
     />
-  );
+  ));
+
+  return null;
 }
+

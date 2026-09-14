@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { AIAssistantTrigger } from "@/components/ai/ai-assistant-trigger";
+
 
 export type Crumb = {
   label: string;
@@ -85,9 +87,10 @@ export function AppHeader({
         </ol>
       </nav>
 
-      {actions && (
-        <div className="flex shrink-0 items-center gap-1">{actions}</div>
-      )}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <AIAssistantTrigger />
+        {actions}
+      </div>
     </header>
   );
 }

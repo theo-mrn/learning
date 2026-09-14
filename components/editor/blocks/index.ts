@@ -2,6 +2,8 @@ import { KanbanExtension } from "./kanban/kanban-extension";
 import { WhiteboardExtension } from "./whiteboard/whiteboard-extension";
 import { TodoExtension } from "./todo/todo-extension";
 import { ImageExtension } from "./image/image-extension";
+import { QuizExtension } from "./quiz/quiz-extension";
+import { FlashcardExtension } from "./flashcard/flashcard-extension";
 
 // Registre centralisé des extensions de blocs complexes
 export const COMPLEX_BLOCK_EXTENSIONS = [
@@ -9,7 +11,18 @@ export const COMPLEX_BLOCK_EXTENSIONS = [
   WhiteboardExtension,
   TodoExtension,
   ImageExtension,
+  QuizExtension,
+  FlashcardExtension,
 ];
+
+// Exports du bloc Flashcards interactif
+export { FlashcardExtension } from "./flashcard/flashcard-extension";
+export * from "./flashcard/flashcard-types";
+
+// Exports du bloc Quiz interactif
+export { QuizExtension } from "./quiz/quiz-extension";
+export * from "./quiz/quiz-types";
+
 
 // Exports du bloc Kanban
 export { KanbanExtension, DEFAULT_KANBAN_COLUMNS } from "./kanban/kanban-extension";

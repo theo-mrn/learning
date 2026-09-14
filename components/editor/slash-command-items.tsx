@@ -15,6 +15,8 @@ import {
   Columns3,
   Presentation,
   Image as ImageIcon,
+  HelpCircle,
+  BookOpen,
 } from "lucide-react";
 
 export type SlashCommandItem = {
@@ -222,6 +224,51 @@ export const SLASH_COMMAND_ITEMS: SlashCommandItem[] = [
         .focus()
         .deleteRange(range)
         .insertContent({ type: "imageBlock" })
+        .run(),
+  },
+  {
+    title: "Quiz / QCM (bloc interactif)",
+    description: "Bloc d'évaluation interactif intégré à votre cours",
+    icon: HelpCircle,
+    keywords: [
+      "quiz",
+      "qcm",
+      "test",
+      "evaluation",
+      "questions",
+      "question",
+      "revision",
+    ],
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({ type: "quizBlock" })
+        .run(),
+  },
+  {
+    title: "Flashcards (cartes de révision)",
+    description: "Fiches de mémorisation interactives avec retournement 3D",
+    icon: BookOpen,
+    keywords: [
+      "flashcard",
+      "flashcards",
+      "carte",
+      "cartes",
+      "memo",
+      "memorisation",
+      "revision",
+      "fiches",
+      "fiche",
+      "anki",
+    ],
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({ type: "flashcardBlock" })
         .run(),
   },
   {

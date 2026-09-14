@@ -215,7 +215,9 @@ export function PomodoroWidget() {
             isActive={running}
           >
             <Timer />
-            <span className="flex-1">{POMODORO_LABELS[kind]}</span>
+            <span className="flex-1" suppressHydrationWarning>
+              {POMODORO_LABELS[kind]}
+            </span>
             {/* `tabular-nums` fige la largeur des chiffres : sans ça, le
                 libellé tressaute à chaque seconde. `suppressHydrationWarning`
                 parce que la valeur vient de `localStorage`, donc absente au

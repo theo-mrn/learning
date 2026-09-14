@@ -28,6 +28,7 @@ import { COMPLEX_BLOCK_EXTENSIONS } from "@/components/editor/blocks";
 import { KanbanDialogProvider } from "@/components/editor/blocks/kanban/kanban-dialog-context";
 import { ImagePageProvider } from "@/components/editor/blocks/image/image-page-context";
 import { KanbanMembersProvider } from "@/components/editor/blocks/kanban/kanban-members-context";
+import { useAIAssistant } from "@/components/ai/ai-assistant-context";
 import type { KanbanAssignee } from "@/components/editor/blocks/kanban/kanban-types";
 import { sanitizeDocument } from "@/lib/sanitize-doc";
 import { renamePage, savePageContent, updatePageIcon } from "@/lib/actions";
@@ -365,6 +366,107 @@ export function PageEditor({
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [saveState]);
+
+  const {
+    setPageContext,
+    registerEditorInsert,
+    registerEditorInsertQuiz,
+    registerEditorInsertFlashcards,
+  } = useAIAssistant();
+
+  // Synchronise le titre et le texte du cours avec l'assistant IA
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncContext = () => {
+      setPageContext({
+        id: page.id,
+        title: title || "Sans titre",
+        content: editor.getText(),
+      });
+    };
+
+    // Synchronisation initiale
+    syncContext();
+
+    // Écoute les modifications pour garder le contexte à jour
+    editor.on("update", syncContext);
+    return () => {
+      editor.off("update", syncContext);
+    };
+  }, [editor, title, page.id, setPageContext]);
+
+  // Réinitialise le contexte IA au démontage de la page
+  useEffect(() => {
+    return () => {
+      setPageContext(null);
+    };
+  }, [setPageContext]);
+
+  // Permet à l'assistant IA d'insérer du texte, des quiz ou des flashcards dans l'éditeur
+  useEffect(() => {
+    if (!editor || !canEdit) {
+      registerEditorInsert(null);
+      registerEditorInsertQuiz(null);
+      registerEditorInsertFlashcards(null);
+      return;
+    }
+
+    const insertText = (textToInsert: string) => {
+      editor
+        .chain()
+        .focus("end")
+        .insertContent("\n\n" + textToInsert)
+        .run();
+    };
+
+    const insertQuiz = (quiz: import("@/components/quiz/quiz-types").QuizData) => {
+      editor
+        .chain()
+        .focus("end")
+        .insertContent({
+          type: "quizBlock",
+          attrs: {
+            title: quiz.title,
+            difficulty: quiz.difficulty,
+            questions: quiz.questions,
+          },
+        })
+        .run();
+    };
+
+    const insertFlashcards = (
+      deck: import("@/components/flashcard/flashcard-types").FlashcardDeckData
+    ) => {
+      editor
+        .chain()
+        .focus("end")
+        .insertContent({
+          type: "flashcardBlock",
+          attrs: {
+            title: deck.title,
+            topic: deck.topic || "",
+            cards: deck.cards,
+          },
+        })
+        .run();
+    };
+
+    registerEditorInsert(insertText);
+    registerEditorInsertQuiz(insertQuiz);
+    registerEditorInsertFlashcards(insertFlashcards);
+    return () => {
+      registerEditorInsert(null);
+      registerEditorInsertQuiz(null);
+      registerEditorInsertFlashcards(null);
+    };
+  }, [
+    editor,
+    canEdit,
+    registerEditorInsert,
+    registerEditorInsertQuiz,
+    registerEditorInsertFlashcards,
+  ]);
 
   function handleTitleBlur() {
     if (title !== page.title) {

@@ -174,18 +174,30 @@ export function usePomodoro() {
     setTimer(next);
   }, []);
 
+  // Pendant l'hydratation, on force l'état initial par défaut (identique au
+  // rendu serveur) pour garantir qu'aucun décalage n'apparaisse entre le HTML
+  // du serveur et le premier rendu client. Dès la fin de l'hydratation,
+  // `useSyncExternalStore` bascule `hydrating` à `false` et l'état réel issu de
+  // `localStorage` s'affiche immédiatement.
+  const effectiveTimer = hydrating ? null : timer;
+  const effectiveSettings = hydrating ? DEFAULT_POMODORO_SETTINGS : settings;
+
   /** Temps restant, dérivé de l'échéance et de l'horloge échantillonnée. */
   const remaining = (() => {
-    if (!timer) return durationFor("work", settings);
-    if (timer.endsAt === null) {
-      return timer.pausedRemaining ?? durationFor(timer.kind, settings);
+    if (!effectiveTimer) return durationFor("work", effectiveSettings);
+    if (effectiveTimer.endsAt === null) {
+      return (
+        effectiveTimer.pausedRemaining ??
+        durationFor(effectiveTimer.kind, effectiveSettings)
+      );
     }
-    return Math.max(0, Math.round((timer.endsAt - now) / 1000));
+    return Math.max(0, Math.round((effectiveTimer.endsAt - now) / 1000));
   })();
 
-  const kind = timer?.kind ?? "work";
-  const running = timer?.endsAt !== null && timer !== null;
-  const total = durationFor(kind, settings);
+  const kind = effectiveTimer?.kind ?? "work";
+  const running =
+    effectiveTimer?.endsAt !== null && effectiveTimer !== null;
+  const total = durationFor(kind, effectiveSettings);
 
   const start = useCallback(
     (nextKindOverride?: PomodoroKind) => {
@@ -351,8 +363,8 @@ export function usePomodoro() {
       total,
       running,
       hydrating,
-      completedWork: timer?.completedWork ?? 0,
-      settings,
+      completedWork: effectiveTimer?.completedWork ?? 0,
+      settings: effectiveSettings,
     } satisfies PomodoroState,
     actions: { start, pause, reset, skip, updateSettings },
     onCycleEnd,

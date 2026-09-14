@@ -8,8 +8,13 @@ const globalForPrisma = globalThis as unknown as {
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 
 export const db =
-  globalForPrisma.prisma ?? new PrismaClient({ adapter });
+  globalForPrisma.prisma &&
+  "quiz" in globalForPrisma.prisma &&
+  "flashcardDeck" in globalForPrisma.prisma
+    ? globalForPrisma.prisma
+    : new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = db;
 }
+
