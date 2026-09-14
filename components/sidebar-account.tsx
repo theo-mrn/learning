@@ -1,14 +1,7 @@
 "use client";
 
-import {
-  BadgeCheck,
-  Bell,
-  ChevronsUpDown,
-  CreditCard,
-  LogOut,
-  Settings,
-  Sparkles,
-} from "lucide-react";
+import Link from "next/link";
+import { BadgeCheck, ChevronsUpDown, LogOut, Settings } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -51,10 +44,12 @@ function initials(name: string): string {
 }
 
 /**
- * Le bloc compte en pied de sidebar. La déconnexion est branchée ; les
- * entrées sans implémentation (profil, facturation, notifications) restent
- * désactivées et marquées « bientôt », pour que la hiérarchie du menu ne
- * change pas de forme quand elles arriveront.
+ * Le bloc compte en pied de sidebar.
+ *
+ * Trois entrées, toutes fonctionnelles : « Mon compte », « Préférences » et
+ * la déconnexion. Les anciennes entrées désactivées (offre Pro, facturation,
+ * notifications) ont été retirées — elles annonçaient des fonctionnalités
+ * inexistantes et non prévues.
  */
 export function SidebarAccount({ user }: { user: AccountUser }) {
   const { isMobile } = useSidebar();
@@ -132,38 +127,17 @@ export function SidebarAccount({ user }: { user: AccountUser }) {
 
         <DropdownMenuSeparator />
 
-        {/* Emplacement d'une offre payante : l'entrée existe pour que la
-            hiérarchie du menu soit la bonne dès maintenant. */}
+        {/* Plus d'entrées « bientôt » : une offre Pro, une facturation et des
+            notifications annonçaient des fonctionnalités qui n'existent pas et
+            ne sont pas prévues. Ne restent que les deux pages réelles. */}
         <DropdownMenuGroup>
-          <DropdownMenuItem disabled>
-            <Sparkles />
-            Passer à Pro
-            <SoonBadge />
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuGroup>
-          <DropdownMenuItem disabled>
+          <DropdownMenuItem render={<Link href="/parametres/compte" />}>
             <BadgeCheck />
             Mon compte
-            <SoonBadge />
           </DropdownMenuItem>
-          <DropdownMenuItem disabled>
+          <DropdownMenuItem render={<Link href="/parametres/preferences" />}>
             <Settings />
             Préférences
-            <SoonBadge />
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled>
-            <CreditCard />
-            Facturation
-            <SoonBadge />
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled>
-            <Bell />
-            Notifications
-            <SoonBadge />
           </DropdownMenuItem>
         </DropdownMenuGroup>
 
@@ -194,10 +168,3 @@ export function SidebarAccount({ user }: { user: AccountUser }) {
 
 /** Marque une entrée dont la fonctionnalité n'est pas encore branchée : sans
  * ça, un élément grisé se lit comme un bug plutôt que comme « à venir ». */
-function SoonBadge() {
-  return (
-    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
-      bientôt
-    </span>
-  );
-}

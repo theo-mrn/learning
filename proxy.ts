@@ -41,6 +41,20 @@ export function proxy(request: NextRequest) {
   }
 
   if (hasSessionCookie && isPublicRoute) {
+    // Un cookie présent ne prouve pas que la session existe encore côté
+    // serveur (expirée, révoquée, base réinitialisée). Rediriger vers "/"
+    // créait alors une boucle infinie : le DAL renvoyait vers /login, et ce
+    // proxy renvoyait vers / — `ERR_TOO_MANY_REDIRECTS`, l'application
+    // devenait inaccessible sans vider les cookies à la main.
+    //
+    // `?expiree=1` est posé par le DAL quand il constate une session morte :
+    // on laisse alors la page de connexion s'afficher et on efface le cookie,
+    // au lieu de renvoyer l'utilisateur dans la boucle.
+    if (request.nextUrl.searchParams.has("expiree")) {
+      const response = NextResponse.next();
+      response.cookies.delete(SESSION_COOKIE);
+      return response;
+    }
     return NextResponse.redirect(new URL("/", request.nextUrl));
   }
 

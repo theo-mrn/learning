@@ -5,9 +5,9 @@ import { getPageTree } from "@/lib/pages";
 import { createPage } from "@/lib/actions";
 import { SidebarSortableGroup } from "@/components/sidebar-tree";
 import { SearchTriggerButton } from "@/components/search-trigger-button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarNavLink } from "@/components/sidebar-nav-link";
 import { SidebarAccount } from "@/components/sidebar-account";
+import { PomodoroWidget } from "@/components/pomodoro/pomodoro-widget";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import {
   Sidebar,
@@ -116,15 +116,22 @@ export async function AppSidebar() {
             n'est une action principale, donc aucun n'est mis en avant. */}
         <SidebarMenu className="gap-0.5">
           <SidebarMenuItem>
+            {/* Le pomodoro est ici, et non dans un bloc de page : la barre
+                latérale est rendue une seule fois pour toute l'application,
+                donc le minuteur survit à la navigation — exactement quand on
+                en a besoin. Un bloc serait détruit en changeant de page et
+                polluerait l'export Markdown. */}
+            <PomodoroWidget />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarNavLink
               href="/trash"
               icon={<Trash2 />}
               label="Corbeille"
             />
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <ThemeToggle />
-          </SidebarMenuItem>
+          {/* Le sélecteur de thème vivait ici : il fait désormais doublon avec
+              la page Préférences, qui est sa place naturelle. */}
         </SidebarMenu>
 
         <div className="my-1.5 h-px bg-sidebar-border" />

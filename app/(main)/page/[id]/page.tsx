@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { getPageDocument } from "@/lib/blocks";
 import { getPageBreadcrumb } from "@/lib/pages";
+import { getPageDocumentWithVersion } from "@/lib/blocks";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { canWrite, requireUser } from "@/lib/dal";
 import { PageEditor } from "@/components/page-editor";
@@ -23,8 +23,8 @@ export default async function EditablePage({
   });
   if (!page || page.isArchived) notFound();
 
-  const [document, trail, user, memberRows] = await Promise.all([
-    getPageDocument(id),
+  const [documentWithVersion, trail, user, memberRows] = await Promise.all([
+    getPageDocumentWithVersion(id),
     getPageBreadcrumb(id, workspace.id),
     requireUser(),
     // Les assignés possibles d'une carte Kanban : uniquement les membres de
@@ -77,7 +77,8 @@ export default async function EditablePage({
         >
           <PageEditor
             page={page}
-            initialContent={document}
+            initialContent={documentWithVersion.document}
+            initialVersion={documentWithVersion.version}
             canEdit={canWrite(workspace.role)}
             members={members}
             currentUserId={user.id}

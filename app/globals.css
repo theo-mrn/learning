@@ -887,6 +887,43 @@ html[data-block-fullscreen] .drag-handle {
   isolation: isolate;
 }
 
+/* ============================================================================
+   Affichage compact
+   Réglage de compte (page Préférences), exposé par `data-compact` sur le
+   conteneur de l'application. Réduit les respirations sans toucher aux tailles
+   de texte : c'est de la densité qu'on gagne, pas de la lisibilité qu'on perd.
+   ========================================================================== */
+
+[data-compact="true"] [data-slot="sidebar-header"],
+[data-compact="true"] [data-slot="sidebar-footer"] {
+  padding: 0.25rem;
+}
+
+[data-compact="true"] [data-slot="sidebar-group"] {
+  padding-block: 0.25rem;
+}
+
+/* La zone d'écriture : c'est là que le gain se voit le plus, le rembourrage
+   par défaut étant généreux pour le confort de lecture. */
+[data-compact="true"] [data-slot="editor-canvas"] {
+  padding-top: 1rem;
+  padding-bottom: 4rem;
+}
+
+@media (min-width: 640px) {
+  [data-compact="true"] [data-slot="editor-canvas"] {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* Les blocs complexes respirent moins, eux aussi. */
+[data-compact="true"] .kanban-node-view,
+[data-compact="true"] .whiteboard-node-view,
+[data-compact="true"] .todo-node-view,
+[data-compact="true"] .image-node-view {
+  margin-block: 0.75rem;
+}
+
 /* Scrollbars fines et esthétiques pour le Kanban */
 .kanban-node-view ::-webkit-scrollbar {
   height: 6px;

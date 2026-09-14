@@ -80,24 +80,47 @@ export function KanbanDialogProvider({ children }: { children: ReactNode }) {
 
   const handleSave = useCallback(
     (card: KanbanCard, columnId: string) => {
-      payload?.onSave(card, columnId);
-      setPayload(null);
+      const save = payload?.onSave;
+      if (!save) return;
+
+      // La fermeture est différée d'un tick.
+      //
+      // `setPayload(null)` démonte `KanbanCardDialogContent` (rendu sous
+      // `{card && ...}`). Appelée dans la même passe que `onSave`, React
+      // regroupe les deux : le démontage pouvait intervenir avant que la
+      // transaction ProseMirror déclenchée par `updateAttributes` ne soit
+      // committée, et l'écriture était perdue sans erreur — la carte
+      // n'apparaissait jamais et n'atteignait jamais la base.
+      //
+      // Constaté au navigateur : une colonne ajoutée depuis l'INTÉRIEUR du
+      // NodeView (même `onChange`) était bien persistée, alors qu'une carte
+      // créée depuis ce dialogue ne l'était pas. La seule différence était
+      // ce démontage synchrone.
+      save(card, columnId);
+      setTimeout(() => setPayload(null), 0);
     },
     [payload]
   );
 
+  // Même précaution que pour `handleSave` : ces deux callbacks écrivent aussi
+  // dans le document, donc la fermeture ne doit pas démonter l'émetteur avant
+  // que la transaction soit committée.
   const handleDuplicate = useCallback(
     (cardId: string) => {
-      payload?.onDuplicateCard?.(cardId);
-      setPayload(null);
+      const duplicate = payload?.onDuplicateCard;
+      if (!duplicate) return;
+      duplicate(cardId);
+      setTimeout(() => setPayload(null), 0);
     },
     [payload]
   );
 
   const handleDelete = useCallback(
     (cardId: string) => {
-      payload?.onDeleteCard?.(cardId);
-      setPayload(null);
+      const remove = payload?.onDeleteCard;
+      if (!remove) return;
+      remove(cardId);
+      setTimeout(() => setPayload(null), 0);
     },
     [payload]
   );

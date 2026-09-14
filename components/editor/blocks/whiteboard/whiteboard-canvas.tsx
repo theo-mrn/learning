@@ -36,6 +36,21 @@ export function WhiteboardCanvas({
    * document à chaque clic qui n'a rien changé (sélection, panoramique…). */
   const dirtyRef = useRef(false);
 
+  /** Dernier instantané que NOUS avons écrit, sérialisé.
+   *
+   * Sert à distinguer « le document a changé parce que j'ai dessiné » de
+   * « quelqu'un d'autre a dessiné ». Sans cette distinction, recharger sur
+   * tout changement de prop rechargerait aussi nos propres traits, ce qui
+   * ferait clignoter le canvas à chaque fin de geste. */
+  const ownSnapshotRef = useRef<string | null>(null);
+
+  /** Instantané au montage, lu par `handleMount` sans le faire dépendre de la
+   * prop : sinon chaque écriture recréerait le callback et **remonterait
+   * tldraw** — c'est précisément ce que le gel de l'instantané évitait côté
+   * bloc. On garde ce bénéfice, et on gère les mises à jour distantes par un
+   * effet dédié plus bas. */
+  const mountSnapshotRef = useRef(snapshot);
+
   // Le callback le plus récent, lu au démontage pour ne pas perdre les
   // derniers traits si le bloc disparaît avant l'écriture.
   const latestRef = useRef(onSnapshotChange);
@@ -63,7 +78,11 @@ export function WhiteboardCanvas({
       return;
     }
     dirtyRef.current = false;
-    latestRef.current(getSnapshot(editor.store));
+    const next = getSnapshot(editor.store);
+    // Mémorisé avant l'écriture : quand cet instantané nous reviendra par la
+    // prop, on saura qu'il est de nous et on ne rechargera pas le canvas.
+    ownSnapshotRef.current = JSON.stringify(next);
+    latestRef.current(next);
   }, []);
 
   const handleMount = useCallback(
@@ -78,9 +97,9 @@ export function WhiteboardCanvas({
 
       // Charger l'existant avant d'écouter, sinon le chargement lui-même
       // serait vu comme une modification de l'utilisateur.
-      if (snapshot) {
+      if (mountSnapshotRef.current) {
         try {
-          loadSnapshot(editor.store, snapshot);
+          loadSnapshot(editor.store, mountSnapshotRef.current);
         } catch {
           // Instantané illisible (schéma d'une version antérieure) : on
           // repart d'un tableau vierge plutôt que de casser la page.
@@ -128,8 +147,42 @@ export function WhiteboardCanvas({
         editor.off("event", onEditorEvent);
       };
     },
-    [snapshot, persist]
+    // Volontairement sans `snapshot` : ce callback doit rester stable, sinon
+    // tldraw est remonté à chaque écriture.
+    [persist]
   );
+
+  /**
+   * Dessin d'un autre membre : on charge l'instantané distant dans le store
+   * tldraw déjà en place.
+   *
+   * Trois garde-fous, parce qu'un rechargement mal placé efface un tracé en
+   * cours :
+   *
+   * - rien si l'instantané est identique à celui qu'on a écrit soi-même ;
+   * - rien si un geste local n'est pas encore persisté (`dirtyRef`) — le
+   *   dessin de l'utilisateur passe avant celui des autres ;
+   * - `loadSnapshot` dans un `try`, un instantané d'un schéma plus récent ne
+   *   doit pas casser le bloc.
+   */
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !snapshot) return;
+
+    const incoming = JSON.stringify(snapshot);
+    if (incoming === ownSnapshotRef.current) return;
+    if (dirtyRef.current) return;
+
+    try {
+      loadSnapshot(editor.store, snapshot);
+      // Désormais notre référence : évite de recharger en boucle si la prop
+      // est recréée à l'identique.
+      ownSnapshotRef.current = incoming;
+    } catch {
+      // Instantané illisible : on garde le dessin courant plutôt que de vider
+      // le canvas.
+    }
+  }, [snapshot]);
 
   // Toute variation de taille du conteneur doit être répercutée à tldraw,
   // sinon le canvas garde un cadrage calculé sur d'anciennes dimensions.

@@ -43,7 +43,11 @@ export function WhiteboardBlockComponent({
 
   // L'instantané initial est figé au montage : le re-passer à tldraw à chaque
   // sauvegarde relancerait un chargement et écraserait le dessin en cours.
-  const [initialSnapshot] = useState(() => snapshot);
+  // Plus de gel ici : le canvas reçoit l'instantané **vivant** pour que les
+  // dessins des autres membres apparaissent. C'est lui qui décide s'il faut
+  // recharger (il ignore nos propres écritures et ne recharge jamais pendant
+  // un tracé), et son `handleMount` ne dépend plus de cette prop, donc tldraw
+  // n'est pas remonté à chaque sauvegarde.
 
   const handleSnapshotChange = useCallback(
     (next: WhiteboardSnapshot) => {
@@ -233,7 +237,7 @@ export function WhiteboardBlockComponent({
           style={isFullscreen ? undefined : { height: effectiveHeight }}
         >
           <WhiteboardCanvas
-            snapshot={initialSnapshot}
+            snapshot={snapshot}
             onSnapshotChange={handleSnapshotChange}
             canEdit={canEdit}
           />

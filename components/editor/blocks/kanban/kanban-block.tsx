@@ -8,7 +8,6 @@ import type { KanbanColumn } from "./kanban-types";
 
 export function KanbanBlockComponent({
   node,
-  updateAttributes,
   deleteNode,
   selected,
   editor,
@@ -31,10 +30,8 @@ export function KanbanBlockComponent({
    * La ref, synchronisée après chaque rendu, garantit qu'on écrit toujours
    * avec la fonction courante. Même correctif que pour le bloc image.
    */
-  const updateAttributesRef = useRef(updateAttributes);
   const nodeRef = useRef(node);
   useEffect(() => {
-    updateAttributesRef.current = updateAttributes;
     nodeRef.current = node;
   });
 
@@ -54,12 +51,40 @@ export function KanbanBlockComponent({
         | KanbanColumn[]
         | ((current: KanbanColumn[]) => KanbanColumn[])
     ) => {
-      const current =
-        (nodeRef.current.attrs.columns as KanbanColumn[]) || [];
-      const value = typeof next === "function" ? next(current) : next;
-      updateAttributesRef.current({ columns: value });
+      // L'écriture ne passe PLUS par `updateAttributes` : cette fonction est
+      // liée à l'instance du NodeView qui l'a fournie. Or ouvrir le dialogue
+      // fait un `setPayload` sur un provider situé au-dessus de
+      // `EditorContent` : l'éditeur se re-rend, Tiptap recrée ses NodeViews,
+      // et les callbacks détenus par le dialogue appartiennent alors à une
+      // instance détruite. ProseMirror ignorait donc la transaction.
+      //
+      // Observé au navigateur : `board.handleSaveCard instance=xg4j6` alors
+      // que l'instance vivante était `a6zyw`, avec `apres=À faire:1` calculé
+      // correctement et un document resté à 0.
+      //
+      // `editor` et le type de nœud, eux, survivent aux remontages : on
+      // localise le nœud dans le document au moment de l'écriture, et on
+      // applique la transaction dessus.
+      editor
+        .chain()
+        .command(({ tr, state }) => {
+          let pos: number | null = null;
+          let currentColumns: KanbanColumn[] = [];
+          state.doc.descendants((candidate, candidatePos) => {
+            if (candidate.type.name !== "kanban" || pos !== null) return;
+            pos = candidatePos;
+            currentColumns = (candidate.attrs.columns as KanbanColumn[]) || [];
+          });
+          if (pos === null) return false;
+
+          const value =
+            typeof next === "function" ? next(currentColumns) : next;
+          tr.setNodeAttribute(pos, "columns", value);
+          return true;
+        })
+        .run();
     },
-    []
+    [editor]
   );
 
   return (

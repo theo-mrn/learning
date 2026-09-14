@@ -22,6 +22,7 @@ import { SlashCommand } from "@/components/editor/slash-command-extension";
 import { TextToolbar } from "@/components/editor/text-toolbar";
 import { TableToolbar } from "@/components/editor/table-toolbar";
 import { useTableFullscreen } from "@/hooks/use-table-fullscreen";
+import { useLivePageSync } from "@/hooks/use-live-page-sync";
 import { DocumentToolbar } from "@/components/editor/document-toolbar";
 import { COMPLEX_BLOCK_EXTENSIONS } from "@/components/editor/blocks";
 import { KanbanDialogProvider } from "@/components/editor/blocks/kanban/kanban-dialog-context";
@@ -62,6 +63,20 @@ function insertImageBlockWithFiles(view: EditorView, files: File[]) {
  * transaction Tiptap. */
 const IDLE_SAVE_MS = 8_000;
 
+/**
+ * Délai d'inactivité quand l'espace compte plusieurs membres.
+ *
+ * Le flux SSE ne diffuse que ce qui est **déjà enregistré** : attendre huit
+ * secondes avant d'écrire, c'est huit secondes pendant lesquelles l'autre ne
+ * voit rien, quelle que soit la réactivité du flux. À plusieurs, la latence
+ * perçue est donc gouvernée par ce délai, pas par le transport.
+ *
+ * Deux secondes : assez pour ne pas écrire à chaque frappe, assez court pour
+ * que la collaboration paraisse vivante. Rendu possible par la sauvegarde
+ * incrémentale — avant, chaque écriture réécrivait toute la page.
+ */
+const COLLAB_IDLE_SAVE_MS = 2_000;
+
 /** Filet de sécurité : même en écrivant sans interruption, le document est
  * enregistré au moins à cette cadence, pour qu'un crash ne coûte jamais plus
  * de cinq minutes de travail. */
@@ -70,6 +85,11 @@ const IDLE_SAVE_MS = 8_000;
  * écritures sans rien protéger de plus. */
 const MAX_SAVE_INTERVAL_MS = 2 * 60_000;
 
+/** Même rapport au délai d'inactivité qu'en solo (~15x), pour garder la même
+ * propriété : le plafond ne doit jamais se déclencher pendant une pause de
+ * frappe ordinaire. */
+const COLLAB_MAX_SAVE_INTERVAL_MS = 30_000;
+
 export function PageEditor({
   page,
   initialContent,
@@ -77,6 +97,9 @@ export function PageEditor({
    * frappe et la sauvegarde était refusée côté serveur : tout le travail
    * était perdu sans avertissement. */
   canEdit = true,
+  /** Version du contenu au chargement. Renvoyée à chaque sauvegarde pour que
+   * le serveur puisse refuser une écriture fondée sur un état périmé. */
+  initialVersion = 0,
   /** Membres de l'espace, pour l'assignation des cartes Kanban. */
   members = [],
   currentUserId = null,
@@ -84,6 +107,7 @@ export function PageEditor({
   page: Page;
   initialContent: JSONContent;
   canEdit?: boolean;
+  initialVersion?: number;
   members?: KanbanAssignee[];
   currentUserId?: string | null;
 }) {
@@ -103,6 +127,21 @@ export function PageEditor({
   // ensemble ils permettent de forcer une sauvegarde au bout de
   // MAX_SAVE_INTERVAL_MS et d'en déclencher une à la sortie de la page.
   const unsavedDoc = useRef<JSONContent | null>(null);
+  /** Version du contenu telle que le serveur l'a confirmée. Une ref et non un
+   * état : la changer ne doit pas re-rendre l'éditeur. */
+  const contentVersion = useRef(initialVersion);
+
+  // Un espace partagé écrit plus souvent : ce qui n'est pas enregistré est
+  // invisible pour les autres, quel que soit le transport temps réel.
+  const isShared = members.length > 1;
+  const idleSaveMs = isShared ? COLLAB_IDLE_SAVE_MS : IDLE_SAVE_MS;
+  const maxSaveIntervalMs = isShared
+    ? COLLAB_MAX_SAVE_INTERVAL_MS
+    : MAX_SAVE_INTERVAL_MS;
+  /** Une écriture locale attend-elle d'être confirmée ? La synchronisation
+   * distante s'abstient dans ce cas : appliquer un document antérieur au
+   * nôtre reviendrait à perdre la frappe en cours. */
+  const hasUnsaved = useRef(false);
   // Initialisé à 0 puis renseigné au montage : appeler Date.now() pendant
   // le rendu est impur (le rendu doit pouvoir être rejoué à l'identique).
   const lastSavedAt = useRef<number>(0);
@@ -127,8 +166,26 @@ export function PageEditor({
           type: string;
           content?: unknown[];
         };
-        await savePageContent(page.id, plainDoc);
+        const result = await savePageContent(
+          page.id,
+          plainDoc,
+          contentVersion.current
+        );
+
+        if (result.status === "conflict") {
+          // Quelqu'un d'autre a modifié la page : le serveur a refusé plutôt
+          // que d'écraser son travail. On arrête d'insister — réessayer
+          // écraserait, et boucler noierait la base de requêtes vouées à
+          // échouer. C'est à l'utilisateur de recharger.
+          pendingDoc.current = null;
+          setSaveState("conflict");
+          return;
+        }
+
+        contentVersion.current = result.version;
         lastSavedAt.current = Date.now();
+        // Plus rien en attente : la synchronisation distante peut reprendre.
+        if (!pendingDoc.current) hasUnsaved.current = false;
         // Ce document-là est écrit : plus rien à sauver, sauf si une frappe
         // est arrivée entre-temps (auquel cas pendingDoc prend le relais).
         if (unsavedDoc.current === doc) unsavedDoc.current = null;
@@ -152,11 +209,12 @@ export function PageEditor({
     (doc: JSONContent) => {
       setSaveState("pending");
       unsavedDoc.current = doc;
+      hasUnsaved.current = true;
 
       // Plafond dur : si la dernière écriture date de plus de cinq minutes,
       // on enregistre maintenant au lieu de repousser encore l'échéance —
       // sinon une session de frappe continue n'écrirait jamais.
-      if (Date.now() - lastSavedAt.current >= MAX_SAVE_INTERVAL_MS) {
+      if (Date.now() - lastSavedAt.current >= maxSaveIntervalMs) {
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
         saveTimeout.current = null;
         flushSave(doc);
@@ -169,9 +227,9 @@ export function PageEditor({
       saveTimeout.current = setTimeout(() => {
         saveTimeout.current = null;
         flushSave(doc);
-      }, IDLE_SAVE_MS);
+      }, idleSaveMs);
     },
-    [flushSave]
+    [flushSave, idleSaveMs, maxSaveIntervalMs]
   );
 
   /** Écrit tout de suite ce qui ne l'est pas encore (sortie de page,
@@ -246,9 +304,25 @@ export function PageEditor({
         return true;
       },
     },
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
+      // Une fusion distante ne doit PAS être renvoyée au serveur : on lui
+      // retournerait ce qu'il vient de nous envoyer, ce qui incrémenterait la
+      // version, réveillerait l'autre onglet, et ainsi de suite — une boucle
+      // de sauvegardes entre les deux clients.
+      if (transaction.getMeta("remoteSync")) return;
       scheduleSave(editor.getJSON());
     },
+  });
+
+  // Synchronisation entre membres : les blocs modifiés ailleurs apparaissent
+  // sans rechargement, et sans jamais toucher le bloc où se trouve le curseur.
+  // Inutile en lecture seule : aucune écriture locale à préserver, mais on
+  // veut quand même voir les changements — donc actif dans les deux cas.
+  useLivePageSync({
+    editor,
+    pageId: page.id,
+    versionRef: contentVersion,
+    hasUnsavedRef: hasUnsaved,
   });
 
   // Démarre le compteur du plafond de sauvegarde à l'ouverture de la page.

@@ -22,6 +22,15 @@ model User {
   /// Nullable : le compte créé avant l'auth n'en a pas encore, il en définit
   /// un à la première connexion.
   passwordHash String?
+
+  /// Préférences d'affichage et d'édition, stockées sur le compte pour suivre
+  /// l'utilisateur d'un appareil à l'autre.
+  ///
+  /// Le thème n'est délibérément PAS ici : il doit être appliqué avant le
+  /// premier rendu pour éviter un flash blanc, donc il vit en `localStorage`
+  /// et est lu par le script inline du layout racine.
+  preferences Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -32,6 +41,7 @@ model User {
   assets    Asset[]
   sessions  Session[]
   sentInvitations WorkspaceInvitation[]
+  pomodoroSessions PomodoroSession[]
 
   @@map("users")
 }
@@ -122,6 +132,19 @@ model Page {
   children Page[]  @relation("PageToPage")
 
   order    Int           @default(0)
+
+  /// Compteur incrémenté à chaque écriture du contenu.
+  ///
+  /// Sert au contrôle de concurrence optimiste : le client renvoie la version
+  /// sur laquelle il a travaillé, et l'écriture est refusée si elle a changé
+  /// entre-temps. Sans ça, `savePageContent` écrasait silencieusement le
+  /// travail d'un autre membre de l'espace — le dernier à sauvegarder gagnait.
+  ///
+  /// `updatedAt` ne pouvait pas jouer ce rôle : il est aussi touché par le
+  /// renommage ou le changement d'emoji, et sa résolution à la milliseconde
+  /// rend deux écritures rapprochées indistinguables.
+  contentVersion Int @default(0)
+
   blocks   Block[]
   versions PageVersion[]
   assets   Asset[]
@@ -171,6 +194,36 @@ model Block {
   @@index([pageId, parentId, order])
   @@index([textContent])
   @@map("blocks")
+}
+
+/// Une session de pomodoro **terminée**.
+///
+/// Seules les sessions achevées sont enregistrées : le minuteur en cours vit
+/// en `localStorage`, pour qu'un décompte à la seconde ne provoque pas une
+/// écriture réseau. La base ne sert donc qu'à l'historique et aux statistiques,
+/// qui doivent survivre à un changement de navigateur.
+model PomodoroSession {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// `work` | `shortBreak` | `longBreak`
+  kind String
+
+  /// Durée effectivement écoulée, en secondes. Peut être inférieure à la durée
+  /// prévue si la session a été arrêtée avant la fin — on enregistre ce qui a
+  /// réellement eu lieu, pas ce qui était prévu.
+  durationSeconds Int
+
+  /// La session est-elle allée jusqu'au bout ?
+  completed Boolean @default(true)
+
+  startedAt DateTime
+  endedAt   DateTime @default(now())
+
+  @@index([userId, endedAt])
+  @@map("pomodoro_sessions")
 }
 
 /// Session serveur. Choix délibéré face au JWT « stateless » : une session en

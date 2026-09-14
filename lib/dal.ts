@@ -24,7 +24,10 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 /** Utilisateur courant, ou redirection vers la connexion. */
 export const requireUser = cache(async (): Promise<SessionUser> => {
   const user = await readSession();
-  if (!user) redirect("/login");
+  // `?expiree=1` signale au proxy que le cookie est mort : sans ce marqueur,
+  // il voyait un cookie présent sur /login et renvoyait vers /, qui revenait
+  // ici — boucle de redirection infinie.
+  if (!user) redirect("/login?expiree=1");
   return user;
 });
 

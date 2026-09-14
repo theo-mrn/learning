@@ -7,6 +7,7 @@ import { canWrite, requirePageAccess, requireUser } from "@/lib/dal";
 import { getActiveWorkspace } from "@/lib/workspace";
 import { extractPlainText } from "@/lib/tiptap-text";
 import { collectOrphanAssets } from "@/lib/asset-gc";
+import { getPageDocumentWithVersion } from "@/lib/blocks";
 import type { Prisma } from "@/app/generated/prisma/client";
 
 export async function createPage(parentId: string | null) {
@@ -212,18 +213,58 @@ const MAX_VERSIONS_PER_PAGE = 50;
  * autosave-on-every-keystroke doesn't flood the history with near-
  * identical versions.
  */
+/** Marqueur interne du conflit détecté dans la transaction.
+ *
+ * Une simple chaîne, pas une classe exportée : ce fichier est `"use server"`,
+ * qui n'autorise que l'export de fonctions asynchrones. Exporter une classe
+ * invalide le module entier — les autres Server Actions devenaient
+ * introuvables (« Export archivePage doesn't exist »). */
+const CONFLICT_MARKER = "__page_conflict__";
+
+export type SaveResult =
+  | { status: "saved"; version: number }
+  | { status: "conflict"; currentVersion: number };
+
+/**
+ * Écrit le document d'une page, de façon **incrémentale** et sous **contrôle
+ * de concurrence optimiste**.
+ *
+ * Avant : la fonction faisait `deleteMany` puis recréait tous les blocs à
+ * chaque sauvegarde. Deux membres d'un même espace écrivant sur la même page
+ * se écrasaient mutuellement — le dernier gagnait, l'autre perdait son travail
+ * sans aucun message. Le garde `saveInFlight` côté client ne protégeait qu'un
+ * seul onglet.
+ *
+ * Maintenant :
+ *
+ * - `expectedVersion` est la version sur laquelle le client a travaillé. Si
+ *   elle ne correspond plus, rien n'est écrit et on renvoie `conflict` : à
+ *   l'appelant de recharger, jamais d'écrasement silencieux.
+ * - Seuls les blocs réellement différents sont touchés (comparaison du JSON
+ *   sérialisé). Une frappe dans un paragraphe ne réécrit plus la page entière,
+ *   ce qui réduit aussi la pression sur la base.
+ * - `contentVersion` est incrémenté dans la même transaction, ce qui rend le
+ *   contrôle fiable même si deux écritures arrivent en parallèle.
+ */
 export async function savePageContent(
   pageId: string,
-  doc: { type: string; content?: unknown[] }
-) {
-  const topLevelNodes = doc.content ?? [];
+  doc: { type: string; content?: unknown[] },
+  expectedVersion?: number
+): Promise<SaveResult> {
+  const topLevelNodes = (doc.content ?? []) as Array<{ type: string }>;
   await requirePageAccess(pageId);
   const user = await requireUser();
 
   const page = await db.page.findUniqueOrThrow({
     where: { id: pageId },
-    select: { title: true },
+    select: { title: true, contentVersion: true },
   });
+
+  // `undefined` = appelant qui ne gère pas encore les versions (restauration
+  // d'une version, scripts) : on n'impose pas le contrôle dans ce cas.
+  if (expectedVersion !== undefined && expectedVersion !== page.contentVersion) {
+    return { status: "conflict", currentVersion: page.contentVersion };
+  }
 
   const latestVersion = await db.pageVersion.findFirst({
     where: { pageId },
@@ -235,19 +276,72 @@ export async function savePageContent(
     Date.now() - latestVersion.createdAt.getTime() >
       VERSION_SNAPSHOT_THROTTLE_MS;
 
-  await db.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.block.deleteMany({ where: { pageId, parentId: null } });
+  let newVersion = page.contentVersion;
+  let conflictVersion: number | null = null;
 
+  try {
+    await db.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Relecture de la version DANS la transaction : entre le contrôle
+    // ci-dessus et ici, une autre écriture a pu passer. C'est ce second
+    // contrôle qui rend la garantie réelle.
+    const fresh = await tx.page.findUniqueOrThrow({
+      where: { id: pageId },
+      select: { contentVersion: true },
+    });
+    if (expectedVersion !== undefined && expectedVersion !== fresh.contentVersion) {
+      // Lever annule la transaction : rien n'est écrit, et on convertit en
+      // résultat `conflict` juste après.
+      conflictVersion = fresh.contentVersion;
+      throw new Error(CONFLICT_MARKER);
+    }
+
+    const existing = await tx.block.findMany({
+      where: { pageId, parentId: null },
+      orderBy: { order: "asc" },
+      select: { id: true, order: true, content: true, type: true },
+    });
+
+    // Comparaison par position : le document Tiptap est une liste ordonnée,
+    // donc l'indice est l'identité naturelle d'un bloc de haut niveau.
     for (let i = 0; i < topLevelNodes.length; i++) {
-      const node = topLevelNodes[i] as { type: string };
-      await tx.block.create({
-        data: {
-          pageId,
-          type: node.type,
-          content: node as object,
-          textContent: extractPlainText(node),
-          order: i,
-          createdById: user.id,
+      const node = topLevelNodes[i];
+      const previous = existing[i];
+      const serialized = JSON.stringify(node);
+
+      if (previous && JSON.stringify(previous.content) === serialized) {
+        continue; // inchangé : on ne touche pas la ligne
+      }
+
+      if (previous) {
+        await tx.block.update({
+          where: { id: previous.id },
+          data: {
+            type: node.type,
+            content: node as object,
+            textContent: extractPlainText(node),
+            order: i,
+          },
+        });
+      } else {
+        await tx.block.create({
+          data: {
+            pageId,
+            type: node.type,
+            content: node as object,
+            textContent: extractPlainText(node),
+            order: i,
+            createdById: user.id,
+          },
+        });
+      }
+    }
+
+    // Le document a raccourci : on retire les lignes en trop, et seulement
+    // celles-là.
+    if (existing.length > topLevelNodes.length) {
+      await tx.block.deleteMany({
+        where: {
+          id: { in: existing.slice(topLevelNodes.length).map((b) => b.id) },
         },
       });
     }
@@ -273,7 +367,26 @@ export async function savePageContent(
     // une sauvegarde concurrente pourrait insérer une référence entre la
     // lecture et la suppression, et on effacerait une image utilisée.
     await collectOrphanAssets(pageId, tx);
-  });
+
+    const updated = await tx.page.update({
+      where: { id: pageId },
+      data: { contentVersion: { increment: 1 } },
+      select: { contentVersion: true },
+    });
+    newVersion = updated.contentVersion;
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === CONFLICT_MARKER &&
+      conflictVersion !== null
+    ) {
+      return { status: "conflict", currentVersion: conflictVersion };
+    }
+    throw error;
+  }
+
+  return { status: "saved", version: newVersion };
 }
 
 /**
@@ -298,6 +411,19 @@ async function prunePageVersions(
   await tx.pageVersion.deleteMany({
     where: { pageId, id: { notIn: keep.map((v: { id: string }) => v.id) } },
   });
+}
+
+/**
+ * Relit le document d'une page et sa version, pour un client déjà ouvert.
+ *
+ * Sert à la synchronisation entre membres : quand le flux SSE annonce une
+ * nouvelle version, le client vient chercher le contenu ici plutôt que de
+ * recharger la page — ce qui lui permet d'intégrer les blocs distants sans
+ * perdre ni la frappe en cours, ni la position du curseur.
+ */
+export async function fetchPageDocument(pageId: string) {
+  await requirePageAccess(pageId, "read");
+  return getPageDocumentWithVersion(pageId);
 }
 
 export async function getPageVersions(pageId: string) {
@@ -333,6 +459,8 @@ export async function restorePageVersion(pageId: string, versionId: string) {
     where: { id: pageId },
     data: { title: version.title },
   });
+  // Sans `expectedVersion` : restaurer est une décision explicite de
+  // l'utilisateur, elle doit aboutir même si la page a bougé entre-temps.
   await savePageContent(pageId, doc);
 
   revalidatePath("/", "layout");
