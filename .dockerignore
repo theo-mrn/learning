@@ -1,0 +1,37 @@
+# `node_modules` est EXCLU volontairement, ce n'est pas une optimisation :
+# `sharp` et `@img/*` installés ici sont des binaires darwin-arm64 (vérifié :
+# node_modules/@img/sharp-darwin-arm64). Les copier dans une image Linux
+# ferait échouer le traitement d'images au démarrage. L'image réinstalle.
+node_modules
+.next
+out
+build
+
+# Artefacts de dev et de test
+.playwright-mcp
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets : ne doivent jamais entrer dans le contexte de build
+.env
+.env.*
+
+# Historique et outillage local
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+npm-debug.log*
+
+# Client Prisma généré : regénéré dans l'image pour la bonne plateforme
+app/generated/prisma
+
+# Documentation et manifests : sans effet sur le runtime
+docs
+k8s
+README.md
+AGENTS.md
+CLAUDE.md
+docker-compose.yml

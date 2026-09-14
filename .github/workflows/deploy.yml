@@ -1,0 +1,126 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  # Permet de redéployer sans nouveau commit.
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Requis pour pousser dans GitHub Container Registry avec GITHUB_TOKEN.
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculer le tag
+        id: meta
+        run: |
+          echo "image=${REGISTRY}/${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Construire et pousser l'image applicative
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: true
+          # Le SHA sert de tag principal : il rend le déploiement traçable et
+          # le retour arrière trivial. `latest` suit, par commodité seulement.
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          # Le cache évite de réinstaller ~600 paquets npm à chaque commit.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Construire et pousser l'image des migrations
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrator
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}-migrator:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}-migrator:latest
+          # Les étages `deps` et `base` sont partagés avec l'image applicative :
+          # ce second build réutilise leurs couches et ne coûte presque rien.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  # GitOps : la CI ne touche PAS au cluster. Elle écrit le nouveau tag dans
+  # argocd_registry, et ArgoCD (selfHeal) applique. Aucun kubeconfig n'a donc
+  # à être stocké dans GitHub.
+  bump:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloner argocd_registry
+        uses: actions/checkout@v4
+        with:
+          repository: theo-mrn/argocd_registry
+          # PAT avec droit d'écriture sur argocd_registry : le GITHUB_TOKEN
+          # de ce dépôt-ci ne porte pas sur un autre dépôt.
+          token: ${{ secrets.ARGOCD_REGISTRY_TOKEN }}
+          path: registry
+
+      - name: Mettre à jour les deux tags
+        working-directory: registry/kubernetes/system/learning
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          # Ce dépôt n'utilise pas kustomize : ArgoCD lit le dossier tel quel.
+          # On réécrit donc directement chaque ligne `image:`.
+          #
+          # L'ancrage est le nom d'image COMPLET suivi de `:` — sans quoi le
+          # motif `learning` remplacerait aussi `learning-migrator`, dont il
+          # est un préfixe.
+          sed -i "s|image: ghcr.io/theo-mrn/learning:.*|image: ghcr.io/theo-mrn/learning:${TAG}|" app.yml
+          sed -i "s|image: ghcr.io/theo-mrn/learning-migrator:.*|image: ghcr.io/theo-mrn/learning-migrator:${TAG}|" migration-job.yml
+
+          echo "--- après réécriture ---"
+          grep -n "image: ghcr.io" app.yml migration-job.yml
+
+          # Garde-fous : la CI doit échouer plutôt que déployer un tag faux.
+          grep -q "image: ghcr.io/theo-mrn/learning:${TAG}$" app.yml \
+            || { echo "::error::tag applicatif non substitué"; exit 1; }
+          grep -q "image: ghcr.io/theo-mrn/learning-migrator:${TAG}$" migration-job.yml \
+            || { echo "::error::tag migrator non substitué"; exit 1; }
+
+      - name: Commiter et pousser
+        working-directory: registry
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Aucun changement de tag — rien à pousser."
+            exit 0
+          fi
+          git add kubernetes/system/learning/app.yml \
+                  kubernetes/system/learning/migration-job.yml
+          git commit -m "learning: ${TAG}"
+          # Rebase avant push : un autre workflow peut avoir commité entre le
+          # clone et maintenant.
+          git pull --rebase
+          git push
