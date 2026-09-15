@@ -21,7 +21,11 @@ def sha
 pipeline {
     agent {
         kubernetes {
-            yaml buildAgent(tools: ['node', 'kaniko', 'trivy', 'git'])
+            // `sonar` est indispensable des lors que le pipeline appelle
+            // sonarScan : chaque bloc s'execute dans le conteneur du meme nom,
+            // et un outil absent de cette liste echoue sur
+            // « container <nom> not found in pod ».
+            yaml buildAgent(tools: ['node', 'kaniko', 'trivy', 'git', 'sonar'])
         }
     }
 
