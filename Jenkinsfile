@@ -25,7 +25,10 @@ pipeline {
             // sonarScan : chaque bloc s'execute dans le conteneur du meme nom,
             // et un outil absent de cette liste echoue sur
             // « container <nom> not found in pod ».
-            yaml buildAgent(tools: ['node', 'kaniko', 'trivy', 'git', 'sonar'])
+            // `kaniko2` en plus de `kaniko` : deux images sont construites
+            // depuis le meme Dockerfile, et l'executeur Kaniko se termine
+            // apres le premier push (voir le commentaire du stage Images).
+            yaml buildAgent(tools: ['node', 'kaniko', 'kaniko2', 'trivy', 'git', 'sonar'])
         }
     }
 
@@ -115,11 +118,17 @@ pipeline {
                         tag: sha,
                         extraTags: ['latest'],
                     )
+                    // container: 'kaniko2' — obligatoire, ce n'est pas un
+                    // reglage de confort. `/kaniko/executor` se termine une
+                    // fois l'image poussee, et le conteneur est bati autour de
+                    // lui : un second build dans le meme conteneur echoue sur
+                    // « Process exited immediately after creation ».
                     dockerBuild(
                         image: 'ghcr.io/theo-mrn/learning-migrator',
                         target: 'migrator',
                         tag: sha,
                         extraTags: ['latest'],
+                        container: 'kaniko2',
                     )
                 }
             }
