@@ -56,17 +56,22 @@ pipeline {
                         container('node') {
                             sh 'npm ci'
                             // Le heap V8 doit etre dimensionne SOUS la limite
-                            // du cgroup (2560Mi), pas laisse au defaut : Node
-                            // calibre sinon son tas sur ce qu'il croit
-                            // disponible et s'arrete sur
-                            // « Reached heap limit — JavaScript heap out of
-                            // memory » (exit 134), a ~1278 Mo au build 7.
+                            // du cgroup (2560Mi ici), pas laisse au defaut :
+                            // Node calibre sinon son tas sur ce qu'il croit
+                            // disponible et s'arrete sur « Reached heap limit
+                            // — JavaScript heap out of memory » (exit 134).
                             //
-                            // 1536 et non davantage : sonarScan tourne dans le
-                            // MEME pod, en parallele, avec son propre runtime
-                            // Node (~1120 Mo annonces). Les deux tas doivent
-                            // cohabiter sous la limite du conteneur.
-                            sh 'NODE_OPTIONS="--max-old-space-size=1536" npm run lint'
+                            // 2048, apres deux mesures : V8 a abandonne a
+                            // 1278 Mo sans la variable (build 7), puis
+                            // exactement a 1534 Mo avec 1536 (build 8) —
+                            // ESLint sur 157 fichiers TypeScript demande plus.
+                            //
+                            // Le kernel n'a OOMKille aucun conteneur dans les
+                            // deux cas : c'est V8 qui renonce a son propre
+                            // plafond, la limite du cgroup n'est jamais
+                            // atteinte. Il reste donc ~500Mi de marge sous
+                            // 2560Mi pour les allocations hors heap.
+                            sh 'NODE_OPTIONS="--max-old-space-size=2048" npm run lint'
                         }
                     }
                 }
