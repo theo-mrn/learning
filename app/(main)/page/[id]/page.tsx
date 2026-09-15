@@ -70,10 +70,25 @@ export default async function EditablePage({
         <div aria-hidden className="paper-grain-overlay" />
 
         {/* Gouttières adaptatives : confortables au doigt sur mobile, larges
-            sur grand écran, avec une mesure de texte qui reste lisible. */}
+            sur grand écran, avec une mesure de texte qui reste lisible.
+
+            La largeur était jugée trop étroite : 46rem (736 px) laissait de
+            larges bandes vides sur un écran d'ordinateur, et serrait surtout
+            les blocs qui ont besoin de place (Kanban, tableaux, tableau
+            blanc). 56rem (896 px) reprend la mesure de Notion en pleine
+            largeur. Une borne est conservée plutôt qu'aucune limite : sur un
+            écran très large, des lignes de texte courant sur 1800 px
+            deviennent pénibles à lire, l'œil perdant le début de la ligne
+            suivante.
+
+            Les gouttières latérales ont été resserrées dans le même esprit
+            (40/48 px → 24/32 px) : elles s'ajoutaient à la marge automatique
+            et mangeaient la largeur utile. Un reste est nécessaire — la
+            poignée de déplacement de bloc se place dans cette gouttière, et à
+            zéro elle sortirait de l'écran. */}
         <div
           data-slot="editor-canvas"
-          className="relative mx-auto w-full max-w-[46rem] px-5 pt-8 pb-32 sm:px-10 lg:px-12"
+          className="relative mx-auto w-full max-w-[56rem] px-4 pt-8 pb-32 sm:px-6 lg:px-8"
         >
           <PageEditor
             page={page}

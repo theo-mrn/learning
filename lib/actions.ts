@@ -465,3 +465,30 @@ export async function restorePageVersion(pageId: string, versionId: string) {
 
   revalidatePath("/", "layout");
 }
+
+/**
+ * Bascule une page entre défilement continu et feuilles A4 numérotées.
+ *
+ * Le mode vit sur la page, pas dans les préférences du compte : un cours long
+ * se relit en feuilles paginées quand une prise de notes rapide gagne à rester
+ * en flux continu, et le même utilisateur veut les deux.
+ *
+ * Aucun contenu n'est touché — c'est une bascule d'affichage, donc pas de
+ * `contentVersion` à incrémenter ni de conflit possible avec une écriture
+ * concurrente.
+ */
+export async function updatePageLayout(pageId: string, mode: string) {
+  await requirePageAccess(pageId);
+
+  // La valeur vient du client : tout ce qui n'est pas explicitement `paged`
+  // retombe sur le défilement continu, plutôt que d'écrire en base une chaîne
+  // arbitraire que le CSS ne saurait pas interpréter.
+  const layoutMode = mode === "paged" ? "paged" : "infinite";
+
+  await db.page.update({
+    where: { id: pageId },
+    data: { layoutMode },
+  });
+
+  revalidatePath("/", "layout");
+}

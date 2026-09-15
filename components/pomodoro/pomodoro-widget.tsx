@@ -215,19 +215,19 @@ export function PomodoroWidget() {
             isActive={running}
           >
             <Timer />
-            <span className="flex-1" suppressHydrationWarning>
-              {POMODORO_LABELS[kind]}
-            </span>
+            {/* Aucun `suppressHydrationWarning` ici : le hook garantit que le
+                premier rendu client est identique au rendu serveur (valeurs
+                par défaut), puis bascule sur l'état réel. Masquer
+                l'avertissement aurait caché la divergence au lieu de la
+                supprimer — et il ne couvre qu'un seul niveau de texte. */}
+            <span className="flex-1">{POMODORO_LABELS[kind]}</span>
             {/* `tabular-nums` fige la largeur des chiffres : sans ça, le
-                libellé tressaute à chaque seconde. `suppressHydrationWarning`
-                parce que la valeur vient de `localStorage`, donc absente au
-                rendu serveur. */}
+                libellé tressaute à chaque seconde. */}
             <span
               data-numeric
-              suppressHydrationWarning
               className="font-medium tabular-nums text-sidebar-foreground/70"
             >
-              {hydrating ? "--:--" : formatRemaining(remaining)}
+              {formatRemaining(remaining)}
             </span>
           </SidebarMenuButton>
         }

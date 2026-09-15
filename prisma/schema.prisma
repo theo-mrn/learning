@@ -136,6 +136,18 @@ model Page {
 
   order    Int           @default(0)
 
+  /// Mode d'affichage du document : `infinite` (défilement continu, le défaut)
+  /// ou `paged` (feuilles A4 numérotées, avec sauts de page visibles).
+  ///
+  /// Réglé **par page** : un cours long se lit en feuilles paginées, une prise
+  /// de notes rapide en flux continu. Une préférence globale aurait imposé le
+  /// même mode aux deux.
+  ///
+  /// Stocké en `String` plutôt qu'en enum Prisma : les deux autres champs de
+  /// ce type dans le schéma (`role`, `kind`) suivent déjà cette convention, et
+  /// ajouter une valeur n'exigera pas de migration d'enum.
+  layoutMode String @default("infinite")
+
   /// Compteur incrémenté à chaque écriture du contenu.
   ///
   /// Sert au contrôle de concurrence optimiste : le client renvoie la version

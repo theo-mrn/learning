@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Download, History, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  Download,
+  History,
+  MoreHorizontal,
+  Printer,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -49,6 +55,20 @@ export function PageActionsMenu({
             <Download />
             Exporter en Markdown
           </DropdownMenuItem>
+
+          {/* L'impression sert les deux modes, et c'est elle qui produit le
+              PDF (via « Enregistrer au format PDF » du navigateur) : aucune
+              dépendance de génération PDF n'est nécessaire. */}
+          <DropdownMenuItem onClick={() => window.print()}>
+            <Printer />
+            Imprimer / PDF
+          </DropdownMenuItem>
+
+          {/* La bascule « pages A4 » a été retirée : l'implémentation par
+              mesure JS provoquait une boucle de rendu (chaque blanc inséré
+              déplaçait les nœuds mesurés à la passe suivante), d'où un
+              clignotement permanent. Le champ `layoutMode` reste en base, la
+              bascule reviendra quand le calcul sera stable. */}
           {/* L'action destructive est séparée du reste du menu, jamais
               adjacente à une action courante. Absente en lecture seule :
               le serveur la refuserait de toute façon. */}

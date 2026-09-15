@@ -123,18 +123,21 @@ export function usePomodoro() {
   const [now, setNow] = useState(() => Date.now());
 
   /**
-   * `true` pendant le rendu serveur et la première passe d'hydratation.
+   * `true` pendant le rendu serveur ET la première passe d'hydratation.
    *
-   * `useSyncExternalStore` est fait pour ça : il renvoie l'instantané serveur
-   * au rendu serveur et l'instantané client ensuite, sans jamais passer par un
-   * `setState` dans un effet (qui provoquerait un rendu en cascade). Le
-   * « magasin » ne change jamais, d'où un abonnement vide.
+   * `useSyncExternalStore` est exactement l'outil prévu : `getServerSnapshot`
+   * sert au HTML serveur, `getSnapshot` au client, et React garantit que la
+   * **première** passe client utilise encore l'instantané serveur. La bascule
+   * se fait ensuite sans `setState` dans un effet.
    *
-   * Sans cette distinction, l'affichage du minuteur divergerait entre le HTML
-   * serveur (qui ignore `localStorage`) et le premier rendu client.
+   * Le magasin ne change jamais après ce basculement, d'où un abonnement qui
+   * notifie une fois au montage puis ne fait plus rien.
    */
   const hydrating = useSyncExternalStore(
-    () => () => {},
+    (onChange) => {
+      onChange();
+      return () => {};
+    },
     () => false,
     () => true
   );
@@ -195,8 +198,11 @@ export function usePomodoro() {
   })();
 
   const kind = effectiveTimer?.kind ?? "work";
-  const running =
-    effectiveTimer?.endsAt !== null && effectiveTimer !== null;
+  // L'ordre compte : `effectiveTimer?.endsAt !== null` vaut `true` quand le
+  // minuteur est absent (l'optional chaining donne `undefined`), donc le test
+  // de nullité doit venir en premier pour que l'expression se lise comme elle
+  // se comporte.
+  const running = effectiveTimer !== null && effectiveTimer.endsAt !== null;
   const total = durationFor(kind, effectiveSettings);
 
   const start = useCallback(

@@ -943,3 +943,44 @@ html[data-block-fullscreen] .drag-handle {
   background: var(--muted-foreground);
 }
 
+
+/* ============================================================================
+   Impression
+   Vaut pour les deux modes : imprimer une note ne doit jamais emporter la
+   barre latérale, les barres d'outils ni les poignées d'édition.
+   ========================================================================== */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+
+  /* Le chrome de l'application n'a aucun sens sur papier. */
+  [data-slot="sidebar-wrapper"] > [data-slot="sidebar"],
+  [data-slot="app-header"],
+  [data-slot="editor-chrome"],
+  [aria-label="Mise en forme"],
+  [aria-label="Actions du tableau"],
+  .drag-handle {
+    display: none !important;
+  }
+
+  /* La toile reprend toute la largeur : les marges sont désormais celles de
+     `@page`, les doubler créerait une colonne étroite au milieu de la feuille. */
+  [data-slot="editor-canvas"] {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Le neutralisation des feuilles simulées vit avec le reste des règles du
+     mode paginé, plus bas : la dupliquer ici créait deux blocs `@media print`
+     visant le même sélecteur, dont seul le dernier comptait. */
+
+  /* Les liens perdent leur couleur d'écran, illisible en niveaux de gris. */
+  .ProseMirror a {
+    color: inherit;
+    text-decoration: underline;
+  }
+}

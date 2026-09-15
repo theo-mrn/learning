@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { RomanList } from "@/components/editor/roman-list-extension";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -104,6 +105,8 @@ export function PageEditor({
   /** Membres de l'espace, pour l'assignation des cartes Kanban. */
   members = [],
   currentUserId = null,
+  /** `"paged"` découpe le document en feuilles A4 numérotées, `"infinite"`
+   * (défaut) le laisse en défilement continu. */
 }: {
   page: Page;
   initialContent: JSONContent;
@@ -269,6 +272,7 @@ export function PageEditor({
             : "Écris ou tape '/' pour insérer un bloc",
       }),
       SlashCommand,
+      RomanList,
       TablePaste,
       TableStyling,
       ...COMPLEX_BLOCK_EXTENSIONS,
@@ -311,6 +315,11 @@ export function PageEditor({
       // version, réveillerait l'autre onglet, et ainsi de suite — une boucle
       // de sauvegardes entre les deux clients.
       if (transaction.getMeta("remoteSync")) return;
+      // La repagination ne modifie que des décorations : le document est
+      // identique. Sans ce filtre, chaque mesure (donc chaque frappe, et
+      // chaque redimensionnement de fenêtre) déclencherait une sauvegarde et
+      // incrémenterait la version de la page pour rien.
+      if (transaction.getMeta("paginationOnly")) return;
       scheduleSave(editor.getJSON());
     },
   });

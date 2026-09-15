@@ -28,7 +28,13 @@ export function AppHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/85 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+    // `data-slot` sert de point d'accroche au CSS d'impression, qui masque
+    // tout le chrome de l'application : sans lui, la barre de navigation
+    // serait imprimée en haut de la première feuille.
+    <header
+      data-slot="app-header"
+      className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/85 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70"
+    >
       <SidebarTrigger className="shrink-0" />
       {/* `self-center` explicite : sans lui le séparateur s'étire sur toute
           la hauteur du header (data-vertical:self-stretch) et dépasse en
