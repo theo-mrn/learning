@@ -55,7 +55,18 @@ pipeline {
                     steps {
                         container('node') {
                             sh 'npm ci'
-                            sh 'npm run lint'
+                            // Le heap V8 doit etre dimensionne SOUS la limite
+                            // du cgroup (2560Mi), pas laisse au defaut : Node
+                            // calibre sinon son tas sur ce qu'il croit
+                            // disponible et s'arrete sur
+                            // « Reached heap limit — JavaScript heap out of
+                            // memory » (exit 134), a ~1278 Mo au build 7.
+                            //
+                            // 1536 et non davantage : sonarScan tourne dans le
+                            // MEME pod, en parallele, avec son propre runtime
+                            // Node (~1120 Mo annonces). Les deux tas doivent
+                            // cohabiter sous la limite du conteneur.
+                            sh 'NODE_OPTIONS="--max-old-space-size=1536" npm run lint'
                         }
                     }
                 }
